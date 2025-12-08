@@ -1,0 +1,171 @@
+Configuration of power-ground plane pair computation
+<date> 28/08/2025 00:00:00
+<PCBgeometry>
+	<PCBwidth> 0.15
+	<PCBlength> 0.08
+	<PCBthick> 0.0004
+	<Portwidth> 0.0005
+</PCBgeometry>
+<PCBelec>
+	<epsr> 4.5
+	<losstan> 0.02
+	<cond> 57000000
+</PCBelec>
+<Ports>
+	<NbPorts> 10
+	<PortNum> 1
+		<PortName> IC
+		<PortPosX> 0.02
+		<PortPosY> 0.01
+		<PortObs> y
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.04
+			<L> 7E-10
+			<C> 3E-8
+		</NumLoad>
+	</PortNum>
+	<PortNum> 2
+		<PortName> VRM
+		<PortPosX> -0.05
+		<PortPosY> -0.025
+		<PortObs> y
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.075
+			<L> 1.5E-9
+			<C> 0.00033
+		</NumLoad>
+	</PortNum>
+	<PortNum> 3
+		<PortName> PC1
+		<PortPosX> 0.02
+		<PortPosY> 0.015
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.003
+			<L> 6E-10
+			<C> 4.7E-5
+		</NumLoad>
+	</PortNum>
+	<PortNum> 4
+		<PortName> PC2
+		<PortPosX> 0.025
+		<PortPosY> 0.01
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.006
+			<L> 3.5E-10
+			<C> 4.7E-6
+		</NumLoad>
+	</PortNum>
+	<PortNum> 5
+		<PortName> PC3
+		<PortPosX> 0.02
+		<PortPosY> 0.005
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.006
+			<L> 3.5E-10
+			<C> 4.7E-6
+		</NumLoad>
+	</PortNum>
+	<PortNum> 6
+		<PortName> PC4
+		<PortPosX> 0.015
+		<PortPosY> 0.01
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.02
+			<L> 2.5E-10
+			<C> 1E-7
+		</NumLoad>
+	</PortNum>
+	<PortNum> 7
+		<PortName> PC5
+		<PortPosX> 0.015
+		<PortPosY> 0.005
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.02
+			<L> 2.5E-10
+			<C> 1E-7
+		</NumLoad>
+	</PortNum>
+	<PortNum> 8
+		<PortName> PC6
+		<PortPosX> 0.025
+		<PortPosY> 0.005
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.02
+			<L> 2.5E-10
+			<C> 1E-7
+		</NumLoad>
+	</PortNum>
+	<PortNum> 9
+		<PortName> PC7
+		<PortPosX> 0.015
+		<PortPosY> 0.015
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.06
+			<L> 2E-10
+			<C> 1E-8
+		</NumLoad>
+	</PortNum>
+	<PortNum> 10
+		<PortName> PC8
+		<PortPosX> 0.025
+		<PortPosY> 0.015
+		<PortObs> n
+		<LoadEnable> y
+		<NbLoad> 1
+		<NumLoad> 1
+			<TypLoad> RLC
+			<R> 0.06
+			<L> 2E-10
+			<C> 1E-8
+		</NumLoad>
+	</PortNum>
+</Ports>
+<SolverConfig>
+	<OrderX> 100
+	<OrderY> 100
+	<Freq>
+		<SweepFreqType> Log
+		<Fmin> 1000000
+		<Fmax> 1000000000
+		<NbFDec> 30
+	</Freq>
+	<Options>
+		<Sum> Simple
+		<ConsiderPortSize> y
+		<AdaptativeOrder> y
+	</Options>
+</SolverConfig>
