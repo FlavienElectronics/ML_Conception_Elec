@@ -22,10 +22,12 @@ class Colors:
     RESET = '\033[0m'
     BOLD = '\033[1m'
 
-EXE_PATH = r'PGPlane_Calculator.exe' 
-CONFIG_FILE = r'CasTest_8decap.pgconf'
-DATA_FILE = 'port_file.txt'
-OUT_FILE = 'out.txt'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+EXE_PATH = os.path.join(SCRIPT_DIR, 'PGPlane_Calculator.exe')
+CONFIG_FILE = os.path.join(SCRIPT_DIR, 'CasTest_8decap.pgconf')
+DATA_FILE = os.path.join(SCRIPT_DIR, 'port_file.txt')
+OUT_FILE = os.path.join(SCRIPT_DIR, 'out.txt')
 
 PORT_NAMES_STR = "PC1;PC2;PC3;PC4;PC5;PC6;PC7;PC8"
 
