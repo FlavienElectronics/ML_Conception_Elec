@@ -28,6 +28,21 @@ DATA_FILE = 'port_file.txt'
 OUT_FILE = 'out.txt'
 
 PORT_NAMES_STR = "PC1;PC2;PC3;PC4;PC5;PC6;PC7;PC8"
+CAP_1206 = [3.2, 1.6]  # Tailles boitiers 1206
+CAP_0805 = [2.0, 1.2]  # Tailles boitiers 0805
+CAP_0402 = [1.0, 0.5]  # Tailles boitiers 0402
+CAP_0201 = [0.6, 0.3]  # Tailles boitiers 0201
+
+# Assignation selon votre budget : C1(1206), C2-3(0805), C4-6(0402), C7-8(0201)
+CAP_SIZES = [
+    CAP_1206,                     # C1
+    CAP_0805, CAP_0805,           # C2, C3
+    CAP_0402, CAP_0402, CAP_0402, # C4, C5, C6
+    CAP_0201, CAP_0201            # C7, C8
+]
+
+# Calcul du rayon de sécurité pour chaque capa (moitié de la diagonale)
+CAP_RADII = np.array([np.sqrt(w**2 + h**2) / 2.0 for w, h in CAP_SIZES])
 
 # --- PARAMÈTRES ---
 NB_CAPS = 8
@@ -87,11 +102,54 @@ def write_input_file(population_matrix):
             line_str = ";".join([f"{val:.6e}" for val in coords_meters])
             f.write(line_str + "\n")
 
-def calculate_cost_from_z(z_matrix):
+# Fonction de coup linéaire (différence entre target et simulé)
+def calculate_cost_from_z(z_matrix, population_matrix):
     z_target_col = Z_TARGET_VECTOR.reshape(-1, 1)
-    diff = z_matrix - z_target_col
-    penalty_matrix = np.maximum(0, diff)
-    return np.sum(penalty_matrix, axis=0)
+    log_diff = np.log10(z_matrix) - np.log10(z_target_col)
+    penalty_z = np.maximum(0, log_diff)**2
+    
+    weights = np.where(FREQ_VECTOR > 100e6, 10.0, 1.0).reshape(-1, 1)
+    cost_impedance = np.sum(penalty_z * weights, axis=0)
+
+    nb_individuals = population_matrix.shape[0]
+    collision_penalties = np.zeros(nb_individuals)
+
+    for n in range(nb_individuals):
+        coords = population_matrix[n, :].reshape(NB_CAPS, 2)
+        penalty_n = 0
+        
+        for i in range(NB_CAPS):
+            for j in range(i + 1, NB_CAPS):
+                dist = np.linalg.norm(coords[i] - coords[j])
+                min_dist = CAP_RADII[i] + CAP_RADII[j]
+                
+                if dist < min_dist:
+                    overlap = min_dist - dist
+                    penalty_n += (overlap**2) * 5000
+        
+        collision_penalties[n] = penalty_n
+
+    return cost_impedance + collision_penalties
+
+# Foncrion de coût avec pondération en fréquence
+# def calculate_cost_from_z(z_matrix):
+#     z_target_col = Z_TARGET_VECTOR.reshape(-1, 1)
+#     diff = z_matrix - z_target_col
+#     penalty_matrix = np.maximum(0, diff)
+#     weights = np.ones_like(FREQ_VECTOR)
+#     mask_hf = FREQ_VECTOR > 100e6
+#     weights[mask_hf] = 1.0 + (FREQ_VECTOR[mask_hf] - 100e6) / (1e9 - 100e6) * 9.0   # Pondération entre 100 M et 1 GHz
+#     weighted_penalty = penalty_matrix * weights.reshape(-1, 1)
+    
+#     return np.sum(weighted_penalty, axis=0)
+
+# Fonction de coput Intégrale de l'Erreur Pondérée (RMSE Fréquentiel)
+# def calculate_cost_from_z(z_matrix):
+#     log_diff = np.log10(z_matrix) - np.log10(Z_TARGET_VECTOR.reshape(-1, 1)) # Passage en log pour normaliser les ordres de grandeur
+#     penalty = np.maximum(0, log_diff)**2 # Carré pour punir sévèrement les gros écarts
+#     weights = np.where(FREQ_VECTOR > 100e6, 10.0, 1.0).reshape(-1, 1) # On définit des poids : 1 en BF, 10 en HF (au delà de 100MHz)
+#     cost = np.trapz(penalty * weights, x=np.log10(FREQ_VECTOR), axis=0) # Intégration par la méthode des trapèzes sur l'axe log de la fréquence
+#     return cost
 
 def launch_simu_engine(population_matrix):
     nb_individuals = population_matrix.shape[0]
@@ -112,18 +170,15 @@ def launch_simu_engine(population_matrix):
 
 def obj_function(p):
     global global_iter_count, global_best_so_far
-    
     z_matrix = launch_simu_engine(p)
+    if z_matrix is None: return np.ones(p.shape[0]) * 1e9
     
-    if z_matrix is None:
-        return np.ones(p.shape[0]) * 1e9
-    
-    costs = calculate_cost_from_z(z_matrix)
-    
+    costs = calculate_cost_from_z(z_matrix, p)
     current_min = np.min(costs)
     best_idx = np.argmin(costs)
     current_best_pos = p[best_idx, :]
-    
+    current_best_z = z_matrix[:, best_idx] 
+
     global_iter_count += 1
     if current_min < global_best_so_far:
         global_best_so_far = current_min
@@ -132,7 +187,8 @@ def obj_function(p):
         "iter": global_iter_count,
         "curr": current_min,
         "gbest": global_best_so_far,
-        "pos": current_best_pos
+        "pos": current_best_pos,
+        "z_profile": current_best_z  # <--- Nouveau
     }
     gui_queue.put(data_packet)
     
@@ -184,7 +240,12 @@ def update_gui(frame):
 
         ax_map.set_title(f"Placement (Iter {last_data['iter']})")
 
-    return line_gbest, line_curr, scat_caps
+        if "z_profile" in last_data:
+            line_z_curr.set_data(FREQ_VECTOR, last_data["z_profile"])
+            ax_z.relim()
+            ax_z.autoscale_view()
+
+    return line_gbest, line_curr, scat_caps, line_z_curr
 
 # =============================================================================
 # 4. MAIN
@@ -199,9 +260,18 @@ if __name__ == "__main__":
     fig = plt.figure(figsize=(14, 8), constrained_layout=True)
     gs = gridspec.GridSpec(2, 2, width_ratios=[1.5, 1], height_ratios=[1, 1], figure=fig)
 
-    ax_conv = fig.add_subplot(gs[:, 0])
+    ax_conv = fig.add_subplot(gs[0, 0])
     ax_cost = fig.add_subplot(gs[0, 1])
-    ax_map = fig.add_subplot(gs[1, 1])
+    ax_z    = fig.add_subplot(gs[1, 0])
+    ax_map  = fig.add_subplot(gs[1, 1])
+
+    line_z_target, = ax_z.loglog(FREQ_VECTOR, Z_TARGET_VECTOR, 'r--', label='Target Z')
+    line_z_curr, = ax_z.loglog(FREQ_VECTOR, np.zeros(NB_FREQ_PTS), 'b-', label='Current Best Z')
+    ax_z.set_title("Impédance vs Fréquence")
+    ax_z.set_xlabel("Fréquence (Hz)")
+    ax_z.set_ylabel("Z (Ohms)")
+    ax_z.grid(True, which="both", ls="-", alpha=0.5)
+    ax_z.legend()
 
     line_gbest, = ax_conv.plot([], [], 'b-o', lw=2, label='Global Best')
     ax_conv.set_title("Convergence (Global Best)")
@@ -230,7 +300,7 @@ if __name__ == "__main__":
     ax_map.axhline(0, color='gray', linestyle=':', alpha=0.5)
     ax_map.axvline(0, color='gray', linestyle=':', alpha=0.5)
     
-    scat_caps = ax_map.scatter([], [], c='blue', s=60, alpha=0.8, edgecolors='k')
+    scat_caps = ax_map.scatter(np.zeros(NB_CAPS), np.zeros(NB_CAPS), c='blue', s=CAP_RADII*100, alpha=0.7, edgecolors='k', zorder=5)
     annot_texts = [ax_map.text(0, 0, f'C{i+1}', fontsize=8, color='blue') for i in range(NB_CAPS)]
     ax_map.set_aspect('equal')
     ax_map.legend(loc='upper left', fontsize=8)
