@@ -80,21 +80,32 @@ MAX_ITER_PER_BLOCK = 50 # On travaille par blocs d'itérations
 # =============================================================================
 
 def calculate_cost(z_matrix, population_matrix):
-    global global_iter_count
-    # 1. Coût Impédance avec Marge de 20%
-    # On compare à Z_TARGET_MATH (80% de la cible nominale)
-    z_target_col = Z_TARGET_MATH.reshape(-1, 1)
-    
-    # Violation de la marge : différence positive entre Z_simu et Z_cible_math
-    violation = np.maximum(0, z_matrix - z_target_col)
-    
-    # On utilise un exposant fort pour que toute pointe au-dessus de la marge soit "catastrophique"
-    # Pondération par fréquence pour stabiliser la HF
-    weights = (FREQ_VECTOR / FREQ_MIN).reshape(-1, 1)
-    cost_impedance = np.sum((violation**2) * weights, axis=0) * 1000
-
-    # 2. Coût Collision (Cercle à Cercle)
+    """
+    Logique de coût à paliers :
+    1. Collision (Max) > 2. Dépassement Rouge (Gros) > 3. Dépassement Vert (Petit)
+    """
     nb_individuals = population_matrix.shape[0]
+    
+    # --- 1. COÛT IMPÉDANCE (PALIERS) ---
+    z_target_red = Z_TARGET_NOMINAL.reshape(-1, 1)
+    z_target_green = Z_TARGET_MATH.reshape(-1, 1)
+    
+    # Violation de la marge (Ligne Verte)
+    viol_green = np.maximum(0, z_matrix - z_target_green)
+    # Violation nominale (Ligne Rouge)
+    viol_red = np.maximum(0, z_matrix - z_target_red)
+    
+    # Pondération par fréquence (on punit plus en HF)
+    freq_weights = (FREQ_VECTOR / FREQ_MIN).reshape(-1, 1)
+    
+    # Calcul des malus : 
+    # Le malus rouge est 10x plus fort que le vert
+    malus_green = np.sum(viol_green**2 * 1000 * freq_weights, axis=0)
+    malus_red = np.sum(viol_red**2 * 10000 * freq_weights, axis=0)
+    
+    cost_impedance = malus_green + malus_red
+
+    # --- 2. COÛT COLLISION (MAXIMUM) ---
     collision_penalties = np.zeros(nb_individuals)
     for n in range(nb_individuals):
         coords = population_matrix[n, :].reshape(NB_CAPS, 2)
@@ -104,7 +115,8 @@ def calculate_cost(z_matrix, population_matrix):
                 dist = np.linalg.norm(coords[i] - coords[j])
                 min_dist = CAP_RADII[i] + CAP_RADII[j]
                 if dist < min_dist:
-                    penalty_n += (min_dist - dist) * 100 # Pénalité linéaire
+                    # Le malus collision est conçu pour être plus grand que malus_red
+                    penalty_n += (min_dist - dist)**2 * 50000 
         collision_penalties[n] = penalty_n
         
     return cost_impedance + collision_penalties
@@ -117,27 +129,24 @@ global_best_profile = None
 condition_satisfied = False
 
 def obj_function(p):
-    global global_iter_count, global_best_so_far, global_best_profile, condition_satisfied
+    global global_iter_count, global_best_so_far, condition_satisfied
     
     z_matrix = launch_simu_engine(p)
     if z_matrix is None: return np.ones(p.shape[0]) * 1e9
     
     costs = calculate_cost(z_matrix, p)
     best_idx = np.argmin(costs)
-    
     current_best_z = z_matrix[:, best_idx]
     
-    # VERIFICATION DE LA CONDITION : Est-ce que tout le tracer est sous Z_TARGET_MATH ?
-    # On vérifie si le maximum de la différence est <= 0
-    margin_violation = np.max(current_best_z - Z_TARGET_MATH)
-    
+    # On vérifie la pire violation par rapport à la ligne verte
+    worst_violation_green = np.max(current_best_z - Z_TARGET_MATH)
+    worst_violation_red = np.max(current_best_z - Z_TARGET_NOMINAL)
+
     global_iter_count += 1
     if costs[best_idx] < global_best_so_far:
         global_best_so_far = costs[best_idx]
-        global_best_profile = current_best_z
-        
-        # Si la violation est nulle, on a gagné la marge de 20% !
-        if margin_violation <= 0:
+        # Condition de succès : aucune fréquence ne dépasse la verte
+        if worst_violation_green <= 0:
             condition_satisfied = True
 
     gui_queue.put({
@@ -145,9 +154,15 @@ def obj_function(p):
         "pos": p[best_idx, :], "z_profile": current_best_z, "satisfied": condition_satisfied
     })
     
-    status = f"{Colors.GREEN}CONFORME (-20%){Colors.RESET}" if margin_violation <= 0 else f"{Colors.RED}HORS-MARGE{Colors.RESET}"
-    print(f" > Iter: {global_iter_count} | Cost: {global_best_so_far:.8f} | Statut: {status}")
-    
+    # Affichage console détaillé
+    if worst_violation_red > 0:
+        msg = f"{Colors.RED}ÉCHEC (Hors Target){Colors.RESET}"
+    elif worst_violation_green > 0:
+        msg = f"{Colors.HEADER}WARNING (Hors Marge){Colors.RESET}"
+    else:
+        msg = f"{Colors.GREEN}OPTIMAL (Conforme){Colors.RESET}"
+        
+    print(f" > Iter: {global_iter_count} | Status: {msg} | Cost: {costs[best_idx]:.4f}")
     return costs
 
 def launch_simu_engine(p):
